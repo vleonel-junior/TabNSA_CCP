@@ -155,7 +155,6 @@ def objective(trial):
     num_selected_blocks = trial.suggest_int("num_selected_blocks", 1, 8)
     learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-2, log=True)
     batch_size = trial.suggest_int("batch_size", 32, 192, step=32)
-    batch_size = trial.suggest_int("batch_size", 32, 128, step=32)
 
     model = SparseAttentionModel(input_shape, output_shape, dim_head, heads, sliding_window_size, compress_block_size, selection_block_size, num_selected_blocks).to(device)
     criterion = nn.CrossEntropyLoss()
