@@ -137,12 +137,26 @@ def evaluate_model_auc(model, X_test, y_test, output_shape, device=device, batch
 ################################################################################################################
 def objective(trial):
 
-    dim = trial.suggest_int("dim", 32, 256, step=32)  
+    dim = trial.suggest_int("dim", 32, 256, step=32)
     dim_head = trial.suggest_int("dim_head", 8, 64, step=8)
     heads = trial.suggest_int("heads", 1, 8)
     sliding_window_size = trial.suggest_int("sliding_window_size", 1, 8)
+    
+    # 1. D'abord choisir compress_block_size
     compress_block_size = trial.suggest_int("compress_block_size", 4, 16, step=4)
-    selection_block_size = trial.suggest_int("selection_block_size", 4, 16, step=4)
+    
+    # 2. Calculer le stride automatiquement
+    compress_block_sliding_stride = compress_block_size // 2
+    
+    # 3. Générer seulement les valeurs compatibles pour selection_block_size
+    possible_selection_sizes = []
+    for size in range(4, 17, 4):  # [4, 8, 12, 16]
+        if size % compress_block_sliding_stride == 0:
+            possible_selection_sizes.append(size)
+    
+    # 4. Forcer Optuna à choisir parmi les valeurs compatibles
+    selection_block_size = trial.suggest_categorical("selection_block_size", possible_selection_sizes)
+    
     num_selected_blocks = trial.suggest_int("num_selected_blocks", 1, 4)
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
     # dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
