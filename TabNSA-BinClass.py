@@ -21,9 +21,9 @@ from torch.utils.data import DataLoader, TensorDataset
 ################################################################################################################
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-TRIALS = 10
-EPOCHS = 100
-NUM_SEED = 50
+TRIALS = 10        # Exploration minimale
+EPOCHS = 100       # Test concept
+NUM_SEED = 1      # Test unique
 # BATCH_SIZE = 64
 
 ################################################################################################################
