@@ -2,6 +2,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
+from optuna.exceptions import TrialPruned
 import pandas as pd
 import seaborn as sns
 import torch
@@ -46,10 +47,9 @@ def fit(model, criterion, optimizer, X_train, y_train, epochs=10, batch_size=32,
 
             optimizer.zero_grad()
             
-            with torch.autograd.detect_anomaly():  # Enable anomaly detection
-                outputs = model(x_batch)
-                loss = criterion(outputs, y_batch)
-                loss.backward()  # Detects any invalid gradients
+            outputs = model(x_batch)
+            loss = criterion(outputs, y_batch)
+            loss.backward()
             
             optimizer.step()
             epoch_train_loss += loss.item() * x_batch.size(0)
@@ -134,32 +134,27 @@ def evaluate_model_auc(model, X_test, y_test, output_shape, device=device, batch
     # print(f'Test Accuracy: {test_accuracy * 100:.2f}%')
     
     return test_auc, test_accuracy
-################################################################################################################
 def objective(trial):
 
-    dim = trial.suggest_int("dim", 32, 256, step=32)
-    dim_head = trial.suggest_int("dim_head", 8, 64, step=8)
-    heads = trial.suggest_int("heads", 1, 8)
-    sliding_window_size = trial.suggest_int("sliding_window_size", 1, 8)
+    # Paramètres élargis - Niveau 1 (Conservative)
+    dim = trial.suggest_int("dim", 64, 384, step=64)
+    dim_head = trial.suggest_int("dim_head", 16, 96, step=16)
+    heads = trial.suggest_int("heads", 2, 12)
+    sliding_window_size = trial.suggest_int("sliding_window_size", 1, 12)
     
-    # 1. D'abord choisir compress_block_size
-    compress_block_size = trial.suggest_int("compress_block_size", 4, 16, step=4)
+    # Solution 3: Espace fixe + Pruning conditionnel
+    compress_block_size = trial.suggest_int("compress_block_size", 4, 32, step=4)
+    selection_block_size = trial.suggest_int("selection_block_size", 4, 32, step=4)
     
-    # 2. Calculer le stride automatiquement
+    # Validation et pruning intelligent
     compress_block_sliding_stride = compress_block_size // 2
+    if selection_block_size % compress_block_sliding_stride != 0:
+        # Dire à Optuna d'abandonner ce trial proprement
+        raise TrialPruned()
     
-    # 3. Générer seulement les valeurs compatibles pour selection_block_size
-    possible_selection_sizes = []
-    for size in range(4, 17, 4):  # [4, 8, 12, 16]
-        if size % compress_block_sliding_stride == 0:
-            possible_selection_sizes.append(size)
-    
-    # 4. Forcer Optuna à choisir parmi les valeurs compatibles
-    selection_block_size = trial.suggest_categorical("selection_block_size", possible_selection_sizes)
-    
-    num_selected_blocks = trial.suggest_int("num_selected_blocks", 1, 4)
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
-    # dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
+    num_selected_blocks = trial.suggest_int("num_selected_blocks", 1, 8)
+    learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-2, log=True)
+    batch_size = trial.suggest_int("batch_size", 32, 192, step=32)
     batch_size = trial.suggest_int("batch_size", 32, 128, step=32)
 
     model = SparseAttentionModel(input_shape, output_shape, dim_head, heads, sliding_window_size, compress_block_size, selection_block_size, num_selected_blocks).to(device)
